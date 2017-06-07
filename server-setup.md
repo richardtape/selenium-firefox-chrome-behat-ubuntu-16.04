@@ -1,21 +1,30 @@
-# Behat Selenium 3.4
+# Behat 3,  Selenium 3.4, Firefox nightly and Chrome stable
+
+Line-by-line steps to set up Behat 3.3(-dev), Selenium 3.4.0, Geckodriver v0.16.1, Firefox nightly, Chromedriver 2.29, and Chrome stable on Ubuntu 16.04
+
+### As root
 
 `apt-get -y update`
 
 `apt-get -y upgrade`
 
 Run steps: https://www.digitalocean.com/community/tutorials/initial-server-setup-with-ubuntu-14-04
+
 Run Steps: https://www.digitalocean.com/community/tutorials/how-to-configure-virtual-memory-swap-file-on-a-vps
 
-`apt-get install -y default-jre`
+## Install JRE
 
-`apt-get install -y language-pack-en-base`
+`apt-get install -y default-jre language-pack-en-base`
+
+## Install PHP 7
 
 `LC_ALL=en_US.UTF-8 add-apt-repository ppa:ondrej/php`
 
 `apt-get update`
 
 `apt-get install -y php7.0 php7.0-curl php7.0-json php7.0-gd php7.0-fpm php7.0-cli php-yaml php7.0-mcrypt php-imagick php-ssh2 php7.0-mbstring php7.0-xml`
+
+## Install Composer
 
 ```
 cd ~
@@ -26,9 +35,15 @@ php -r "unlink('composer-setup.php');"
 mv composer.phar /usr/local/bin/composer
 apt-get install -y git zip unzip
 
+```
+
+## Extra pieces required for selenium
+
+```
 apt-get install -y libxi6 libgconf-2-4 libxss1 libappindicator1 libindicator7
 apt-get install -y openjdk-8-jre-headless xvfb libxi6 libgconf-2-4
 ```
+
 
 ### As non-root user
 
