@@ -1,0 +1,29 @@
+default:
+    suites:
+        default:
+            paths: [ %paths.base%/features ]
+            contexts:
+                - FeatureContext:
+                    parameters: &FEATURECONTEXTPARAMSDEFAULTS
+                        stage: staging
+                - Behat\MinkExtension\Context\MinkContext
+    extensions:
+        Behat\MinkExtension: &MINKEXTENSIONSDEFAULTS
+            base_url: https://richardtape.com/
+            goutte: ~
+            selenium2: ~
+            #browser_name: 'chrome'
+        emuse\BehatHTMLFormatter\BehatHTMLFormatterExtension: &FORMATTEREXTENSIONDEFAULTS
+            name: html
+            renderer: Twig
+            file_name: index
+            print_args: true
+            print_outp: true
+            loop_break: true
+    formatters: &FORMATTERSSETTINGSDEFAULTS
+        pretty:
+            verbose: true
+            paths: false
+            snippets: true
+        html:
+          output_path: %paths.base%/build/html/behat
