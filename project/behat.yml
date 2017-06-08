@@ -1,7 +1,10 @@
 default:
+    autoload:
+        # These paths are dependent on how you set up your features/configs
+        '': %paths.base%/../../features/bootstrap
     suites:
         default:
-            paths: [ %paths.base%/features ]
+            paths: [ %paths.base%/../../features ]
             contexts:
                 - FeatureContext:
                     parameters: &FEATURECONTEXTPARAMSDEFAULTS
@@ -26,4 +29,4 @@ default:
             paths: false
             snippets: true
         html:
-          output_path: %paths.base%/build/html/behat
+          output_path: %paths.base%/../../build/html/behat
