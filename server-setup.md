@@ -135,4 +135,109 @@ java -jar /usr/local/bin/selenium-server-standalone-3.4.0.jar -role node -hub ht
 
 `chmod +x start-selenium-node.sh`
 
+## If you wish to be able to auto-pull when a push to a repo is made, we'll need nginx
+
+At the time of writing, nginx installed through default apt-get repos is 1.10. The mainline, with extra bits and pieces for http/2 and bug fixes is 1.13.1. If you're happy with 1.10 then simply `sudo apt-get install nginx` will be just fine. However, I like new things, so...
+
+`sudo nano /etc/apt/sources.list`
+
+Add the following to the bottom of the file;
+
+```
+deb http://nginx.org/packages/mainline/ubuntu/ xenial nginx
+deb-src http://nginx.org/packages/mainline/ubuntu/ xenial nginx
+```
+
+```
+cd ~
+wget http://nginx.org/keys/nginx_signing.key
+sudo apt-key add nginx_signing.key
+sudo apt update
+```
+
+Now we have the new repo, we can install the nginx mainline. But first you may be told there are other available upgrades. If so, run `sudo apt-get upgrade` first.
+
+```
+sudo apt install nginx
+```
+
+```
+sudo systemctl unmask nginx
+sudo systemctl start nginx
+sudo systemctl enable nginx
+```
+
+```
+sudo nano /etc/php/7.0/fpm/pool.d/www.conf
+```
+
+Change `user nginx;` to `user www-data;`
+
+```
+sudo systemctl reload nginx
+```
+
+Vist your machine's IP in a browser and you should see the nginx welcome screen. Hoorah.
+
 Then the server is set up and it's down to behat settings (see /project)
+
+~/behat/project/
+
+bin/ (run `./bin/behat` from the `~/behat/project/` directory)
+ - behat
+ - phpunit
+
+build/html/behat (This is where the reports go after running tests)
+ - assets/
+    - index.html
+ - sites/
+    - sitename.com/
+       - firefox/
+         - assets/
+         - index.html
+       - chrome/
+         - assets/
+         - index.html
+
+configs/
+ - sitename.com/
+   - behat-config.yml
+ - readme.md
+ - .git (git repo tzatziki-features)
+
+features/
+ - bootstrap/
+   - FeatureContext.php
+   - Utils.php
+ - sites/
+   - sitename.com/
+     - features/
+       - test1.feature
+       - test2.feature
+   - readne.md
+   - .git (git repo tzatziki-configs)
+
+lib/
+ - BrowserStackContext.php
+ - parallel.php
+
+public/
+ - config.json
+ - debug.log
+ - github-update.sh
+ - github-webhook.php
+ - index.html
+ - index.php
+
+screenshots/
+ - failure1.html
+ - failure2.html
+
+vendor/
+ - whole
+ - lotta
+ - dependencies
+
+behat.yml
+composer.json
+composer.lock
