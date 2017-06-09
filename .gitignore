@@ -1,0 +1,4 @@
+project/public/config.json
+project/public/github-update.sh
+project/public/github-webhook.php
+.DS_Store
