@@ -1,0 +1,14 @@
+{
+    "email": {
+        "from": "your@email.com",
+        "to": "your@email.com"
+    },
+    "endpoints": [
+        {
+            "repo": "richardtape/tzatziki-features",
+            "branch": "master",
+            "action": "New push to tzatziki-features",
+            "run": "/path/to/public/github-update.sh"
+        }
+    ]
+}

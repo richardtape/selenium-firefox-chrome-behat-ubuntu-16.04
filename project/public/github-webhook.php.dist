@@ -1,0 +1,363 @@
+<?php
+
+/*
+You'll want to change 3 things in this file.
+1. the $secret
+2. the $log_location and
+3. $config_filename
+
+Additionall, you may want to adjust the YOURNAMESPACE namespace at the top and bottom
+*/
+
+namespace YOURNAMESPACE;
+
+class Behat_Github_Features_Pull {
+
+	// Our known secret which is set up in the webhook.
+	private $secret = 'YOURCOOLSECRETHERE';
+
+	// Known Github IP ranges. Requests only come from here.
+	private $github_ip_ranges = array(
+		'192.30.252.0/22',
+		'185.199.108.0/22',
+	);
+
+	private $valid_github_events = array(
+		'push'
+	);
+
+	// Debug log location
+	private $log_location = '/path/to/your/public/debug.log';
+
+	// json config location
+	private $config_filename = '/path/to/your/public/config.json';
+
+	/**
+	 * Initialize. Validate request and then perform required action.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param null
+	 * @return null
+	 */
+
+	public function init() {
+
+		$this->add_to_log( array( 'Request made', time() ) );
+
+		// Ensure we have a valid post from github
+		$valid = $this->validate_post();
+		if ( false === $valid ) {
+			return;
+		}
+
+		$this->add_to_log( array( 'Request is valid', time() ) );
+
+		$this->run();
+
+	}/* init() */
+
+
+	/**
+	 * After we've determined we have a valid github event request, we run the script
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param null
+	 * @return null
+	 */
+
+	public function run() {
+
+		if ( ! file_exists( $this->config_filename ) ) {
+			$this->add_to_log( array( 'Error: Unable to find json config file.', time() ) );
+		}
+
+		$config = json_decode( file_get_contents( $this->config_filename ), true );
+
+		if ( ! is_array( $config['endpoints'] ) ) {
+			$this->add_to_log( array( 'Error: Endpoints needs to be an array in the configuration.', $config['endpoints'], time() ) );
+			return;
+		}
+
+		$post_body = $_POST['payload'];
+		$payload = json_decode( $post_body );
+
+		foreach ( $config['endpoints'] as $endpoint ) {
+
+			// check if the push came from the right repository and branch
+			if ( $payload->repository->url !== 'https://github.com/' . $endpoint['repo'] ) {
+				$this->add_to_log( array( 'Error: Incorrect repo', time() ) );
+				return;
+			}
+
+			if ( $payload->ref !== 'refs/heads/' . $endpoint['branch'] ) {
+				$this->add_to_log( array( 'Error: Incorrect branch.', time() ) );
+				return;
+			}
+
+			// execute update script, and record its output
+			ob_start();
+			passthru( $endpoint['run'] );
+			$output = ob_get_contents();
+
+			// prepare and send the notification email
+			if ( isset( $config['email'] ) ) {
+				$this->add_to_log( array( 'Info: Sending email.', time() ) );
+				mail( $config['email']['to'], $endpoint['action'], $this->get_email_body( $payload, $endpoint, $output ), $this->get_email_headers( $config, $payload ) );
+			}
+
+			return true;
+
+		}
+
+	}/* run() */
+
+
+	/**
+	 * Create the email headers for the success email
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param null
+	 * @return null
+	 */
+
+	public function get_email_headers( $config, $payload ) {
+
+		$headers = 'From: ' . $config['email']['from'] . "\r\n";
+		$headers .= 'CC: ' . $payload->pusher->email . "\r\n";
+		$headers .= "MIME-Version: 1.0\r\n";
+		$headers .= "Content-Type: text/html; charset=ISO-8859-1\r\n";
+
+		return $headers;
+
+	}/* get_email_headers() */
+
+
+	public function get_email_body( $payload, $endpoint, $output ) {
+
+		$body = '<p>The Github user <a href="https://github.com/'
+		. $payload->pusher->name .'">@' . $payload->pusher->name . '</a>'
+		. ' has pushed to ' . $payload->repository->url
+		. ' and consequently, ' . $endpoint['action']
+		. '.</p>';
+
+		$body .= '<p>Here\'s a brief list of what has been changed:</p>';
+		$body .= '<ul>';
+
+		foreach ( $payload->commits as $commit ) {
+
+			$body .= '<li>'.$commit->message.'<br />';
+			$body .= '<small style="color:#999">added: <b>' . count( $commit->added )
+				.'</b> &nbsp; modified: <b>'.count( $commit->modified )
+				.'</b> &nbsp; removed: <b>'.count( $commit->removed )
+				.'</b> &nbsp; <a href="' . $commit->url
+				. '">read more</a></small></li>';
+		}
+		$body .= '</ul>';
+		$body .= '<p>What follows is the output of the script:</p><pre>';
+		$body .= $output. '</pre>';
+		$body .= '<p>Cheers, <br/>Github Webhook Endpoint</p>';
+
+		return $body;
+
+	}/* get_email_body() */
+
+
+	/**
+	 * Validate the post is from github, has the correct hash, and has everything we need.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param null
+	 * @return true if post is valid false otherwise
+	 */
+
+	public function validate_post() {
+
+		// This is the IP Address of the requester
+		$post_ip_address = $_SERVER['REMOTE_ADDR'];
+		$event = $_SERVER['HTTP_X_GITHUB_EVENT'];
+
+		// Validate IP from known source
+		if ( ! $this->ip_is_from_github_ip( $post_ip_address ) ) {
+			return false;
+		}
+
+		// Validate hash
+		if ( ! $this->valid_hash() ) {
+			return false;
+		}
+
+		// Ensure it's an event from github that we want
+		if ( ! $this->is_valid_github_event( $event ) ) {
+			return false;
+		}
+
+		return true;
+
+	}/* validate_post() */
+
+
+	/**
+	 * Validate the request has a hash we're expecting.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param null
+	 * @return null
+	 */
+
+	public function valid_hash() {
+
+		$secret = $this->secret;
+		$post_data = file_get_contents( 'php://input' );
+
+		$signature = hash_hmac( 'sha1', $post_data, $secret );
+
+		$hash = $this->test_signature( $_SERVER['HTTP_X_HUB_SIGNATURE'], $signature );
+
+		if ( false === $hash ) {
+			$this->add_to_log( array( 'Error: Not valid Hash', $_SERVER['HTTP_X_HUB_SIGNATURE'], $signature, $post_data, $secret, time() ) );
+		}
+
+		return $hash;
+
+	}/* valid_hash() */
+
+
+	/**
+	 * Ensure this is a valid github event that we want to act upon
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param null
+	 * @return null
+	 */
+
+	public function is_valid_github_event( $event ) {
+
+		$in_array = in_array( $event, $this->valid_github_events, true );
+
+		if ( false === $in_array ) {
+			$this->add_to_log( array( 'Error: Not valid github event', $event, time() ) );
+		}
+
+		return $in_array;
+
+	}/* is_valid_github_event() */
+
+
+	/**
+	 * Output a message to the log
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param null
+	 * @return null
+	 */
+
+	public function add_to_log( $details = array() ) {
+
+		file_put_contents( $this->log_location, print_r(
+			$details,
+			true
+		), FILE_APPEND );
+
+	}/* add_to_log */
+
+
+	/**
+	 * Check if a given ip is in a network
+	 * @param  string $ip    IP to check in IPV4 format eg. 127.0.0.1
+	 * @param  string $range IP/CIDR netmask eg. 127.0.0.0/24, also 127.0.0.1 is accepted and /32 assumed
+	 * @return boolean true if the ip is in this range / false if not.
+	 */
+
+	public function ip_in_range( $ip, $range ) {
+
+		if ( strpos( $range, '/' ) === false ) {
+			$range .= '/32';
+		}
+
+		// $range is in IP/CIDR format eg 127.0.0.1/24
+		list( $range, $netmask ) = explode( '/', $range, 2 );
+
+		$range_decimal = ip2long( $range );
+		$ip_decimal = ip2long( $ip );
+		$wildcard_decimal = pow( 2, ( 32 - $netmask ) ) - 1;
+		$netmask_decimal = ~ $wildcard_decimal;
+
+		return ( ( $ip_decimal & $netmask_decimal ) == ( $range_decimal & $netmask_decimal ) );
+
+	}/* ip_in_range() */
+
+
+	/**
+	 * Determine if the passed $ip is in one of github's IP ranges.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param null
+	 * @return null
+	 */
+
+	public function ip_is_from_github_ip( $ip ) {
+
+		$is_github = false;
+
+		foreach ( $this->github_ip_ranges as $id => $github_ip ) {
+			if ( $this->ip_in_range( $ip, $github_ip ) ) {
+				$is_github = true;
+			}
+		}
+
+		if ( false === $is_github ) {
+			$this->add_to_log( array( 'Error: Not valid IP Address', $ip, time() ) );
+		}
+
+		return $is_github;
+
+	}/* ip_is_from_github_ip() */
+
+
+	/**
+	 * Verify the passed $post_sig is valid compared to the known secret.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $post_sig - The passed post signature
+	 * @param string $compared_to - Our known signature
+	 * @return bool
+	 */
+
+	public function test_signature( $post_sig, $compared_to ) {
+
+		$check = 'sha1=' . $compared_to;
+
+		return hash_equals( $check, $post_sig );
+
+	}/* test_signature() */
+
+
+	/**
+	 * Validate that the passed $ip Address is indeed an IP Address.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param (string) $ip The IP to check is a valid IP Address
+	 * @return bool
+	 */
+
+	public function validate_string_is_ip( $ip ) {
+
+		return filter_var( $ip, FILTER_VALIDATE_IP );
+
+	}/* validate_string_is_ip() */
+
+}/* class Behat_Github_Features_Pull */
+
+// Fire it up!
+$github_hook = new \YOURNAMESPACE\Behat_Github_Features_Pull();
+$github_hook->init();

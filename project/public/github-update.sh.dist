@@ -1,0 +1,4 @@
+#!/bin/bash
+
+echo "Performing git pull" >> /path/to/your/public/debug.log
+cd /path/to/your/features/sites && git pull origin master
